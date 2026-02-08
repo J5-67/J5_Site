@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Manager</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .time-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            width: 100px;
+            margin-right: 20px;
+            color: #00ffcc;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            cursor: pointer;
+            background-color: #444;
+            color: white;
+            border: 2px solid #666;
+            border-radius: 8px;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+        button:hover {
+            background-color: #00ffcc;
+            color: #000;
+            border-color: #00ffcc;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        /* 세 번째 줄 전용 강조 스타일 */
+        .row.special button {
+            border-color: #ff00ff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="time-container">
+    </div>
+
+<script>
+    // 각 줄별로 더해질 초 데이터 (이미지/버튼 정보)
+    const baseSeconds = [300, 273, 254, 250, 234];
+    const rowsCount = 5;
+
+    // 현재 각 행의 총 초수를 저장하는 배열 (00:00으로 시작)
+    let timeStates = [0, 0, 0, 0, 0];
+
+    const container = document.getElementById('time-container');
+
+    // 초를 00:00 형식으로 변환하는 함수
+    function formatTime(totalSeconds) {
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // 화면 업데이트 함수
+    function updateDisplay(rowIndex) {
+        const timeElement = document.getElementById(`time-${rowIndex}`);
+        timeElement.innerText = formatTime(timeStates[rowIndex]);
+    }
+
+    // 시간 추가 함수
+    function addSeconds(rowIndex, seconds) {
+        timeStates[rowIndex] += seconds;
+        updateDisplay(rowIndex);
+    }
+
+    // 5개의 줄 생성
+    for (let i = 0; i < rowsCount; i++) {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'row';
+        if (i === 2) rowDiv.classList.add('special'); // 세 번째 줄(가운데) 표시
+
+        // 시간 표시 영역
+        const timeSpan = document.createElement('span');
+        timeSpan.id = `time-${i}`;
+        timeSpan.className = 'time-display';
+        timeSpan.innerText = "00:00";
+        rowDiv.appendChild(timeSpan);
+
+        // 버튼 그룹 생성
+        const btnGroup = document.createElement('div');
+        btnGroup.className = 'button-group';
+
+        // 기본 5개 버튼 생성
+        baseSeconds.forEach((sec, idx) => {
+            const btn = document.createElement('button');
+            btn.innerText = `+${sec}s`;
+            btn.onclick = () => addSeconds(i, sec);
+            btnGroup.appendChild(btn);
+        });
+
+        // 세 번째 줄(인덱스 2)에 6번째 버튼(217초) 추가
+        if (i === 2) {
+            const extraBtn = document.createElement('button');
+            extraBtn.innerText = `+217s`;
+            extraBtn.onclick = () => addSeconds(i, 217);
+            btnGroup.appendChild(extraBtn);
+        }
+
+        rowDiv.appendChild(btnGroup);
+        container.appendChild(rowDiv);
+    }
+</script>
+
+</body>
+</html>
