@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,30 +16,50 @@
             min-height: 100vh;
             margin: 0;
         }
+
         .container {
             background-color: #2a2a2a;
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
         }
+
         .row {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            gap: 20px;
+            /* 스펠 그룹 간 간격 */
+            background-color: #333;
+            padding: 10px;
+            border-radius: 8px;
         }
+
+        /* 하나의 스펠 세트 (드롭다운 + 시간 + 버튼들) */
+        .spell-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .time-display {
             font-size: 1.5rem;
             font-weight: bold;
-            width: 100px;
-            margin-right: 20px;
+            width: 60px;
+            /* 너비 조정 */
+            text-align: center;
             color: #00ffcc;
         }
+
         .button-group {
             display: flex;
-            gap: 10px;
+            gap: 5px;
         }
+
         button {
-            padding: 5px;
+            padding: 0;
             cursor: pointer;
             background-color: #444;
             color: white;
@@ -48,120 +69,252 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            width: 44px;
+            height: 44px;
+            overflow: hidden;
         }
+
         button img {
-            width: 40px;  
-            height: 40px;
-            object-fit: contain;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
+
         button:hover {
             background-color: #00ffcc;
             border-color: #00ffcc;
         }
+
         button:active {
             transform: scale(0.95);
         }
+
+        .spell-selector {
+            background-color: #222;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            width: 80px;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="container" id="time-container"></div>
+    <div class="container" id="time-container"></div>
 
-<script>
-    // 1, 2, 4, 5번째 줄용 버튼 데이터
-    const standardButtons = [
-        { name: 'flash', sec: 300 },
-        { name: '273', sec: 273 },
-        { name: '254', sec: 254 },
-        { name: '234', sec: 234 }
-    ];
+    <script>
+        const rowsCount = 5;
+        // 2차원 배열로 변경: [행][스펠칸(0,1)]
+        let timeStates = [];
+        let intervals = [];
 
-    // 3번째 줄 전용 버튼 데이터
-    const specialButtons = [
-        { name: 'flash', sec: 300 },
-        { name: '273', sec: 273 },
-        { name: '250', sec: 250 },
-        { name: '234', sec: 234 },
-        { name: '217', sec: 217 }
-    ];
-    
-    const rowsCount = 5;
-    let timeStates = [0, 0, 0, 0, 0];
-    let intervals = [null, null, null, null, null];
+        let spellDataMap = {}; // 전체 스펠 데이터
 
-    const container = document.getElementById('time-container');
+        const spellFileMap = {
+            '점멸': 'flash', '유체화': 'ghost', '회복': 'heal', '탈진': 'exhaust',
+            '방어막': 'barrier', '점화': 'ignite', '정화': 'cleanse', '순간이동': 'teleport'
+        };
 
-    function formatTime(totalSeconds) {
-        const mins = Math.floor(totalSeconds / 60);
-        const secs = totalSeconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
+        // CSV 인덱스별 고정 이미지 매핑 (기본 제외 나머지 버튼)
+        // 3: 장화(273), 4: 우통(254), 5: 미장(250), 6: 장화+우통(234), 7: 미장+우통(217)
+        const FIXED_IMAGE_MAP = {
+            3: '273',
+            4: '254',
+            5: '250',
+            6: '234',
+            7: '217'
+        };
 
-    function updateDisplay(rowIndex) {
-        const timeElement = document.getElementById(`time-${rowIndex}`);
-        if (timeElement) {
-            timeElement.innerText = formatTime(timeStates[rowIndex]);
+        const container = document.getElementById('time-container');
+
+        // 초기화 시 배열 생성
+        for (let i = 0; i < rowsCount; i++) {
+            timeStates.push([0, 0]);
+            intervals.push([null, null]);
         }
-    }
 
-    function setAndStartTimer(rowIndex, seconds) {
-        timeStates[rowIndex] = seconds;
-        updateDisplay(rowIndex);
+        async function init() {
+            try {
+                const response = await fetch('data/SummonerSpellData.csv');
+                const data = await response.text();
+                const rows = data.split('\n').map(row => row.split(','));
 
-        if (intervals[rowIndex]) return;
+                rows.forEach(row => {
+                    if (row.length > 2 && row[1]) {
+                        const spellName = row[0].trim();
+                        if (spellFileMap[spellName]) {
+                            spellDataMap[spellName] = row;
+                        }
+                    }
+                });
 
-        intervals[rowIndex] = setInterval(() => {
-            if (timeStates[rowIndex] > 0) {
-                timeStates[rowIndex]--;
-                updateDisplay(rowIndex);
-            } else {
-                clearInterval(intervals[rowIndex]);
-                intervals[rowIndex] = null;
+                createTimerGrid();
+
+            } catch (error) {
+                console.error("CSV 로드 중 오류 발생:", error);
+                container.innerText = "데이터 로드 실패";
             }
-        }, 1000);
-    }
+        }
 
-    // 버튼 생성 함수 (중복 코드 방지)
-    function createImageButton(imgData, rowIndex) {
-        const btn = document.createElement('button');
-        const img = document.createElement('img');
-        img.src = `images/${imgData.name}.png`;
-        img.alt = imgData.name;
-        
-        btn.onclick = () => setAndStartTimer(rowIndex, imgData.sec);
-        btn.appendChild(img);
-        return btn;
-    }
+        function formatTime(totalSeconds) {
+            // 초 단위 (000) 포맷
+            return totalSeconds.toString().padStart(3, '0');
+        }
 
-    for (let i = 0; i < rowsCount; i++) {
-        const rowDiv = document.createElement('div');
-        rowDiv.className = 'row';
+        function updateDisplay(rowIndex, spellIndex) {
+            const timeElement = document.getElementById(`time-${rowIndex}-${spellIndex}`);
+            if (timeElement) {
+                timeElement.innerText = formatTime(timeStates[rowIndex][spellIndex]);
+            }
+        }
 
-        const timeSpan = document.createElement('span');
-        timeSpan.id = `time-${i}`;
-        timeSpan.className = 'time-display';
-        timeSpan.innerText = "00:00";
-        rowDiv.appendChild(timeSpan);
+        function setAndStartTimer(rowIndex, spellIndex, seconds) {
+            timeStates[rowIndex][spellIndex] = seconds;
+            updateDisplay(rowIndex, spellIndex);
 
-        const btnGroup = document.createElement('div');
-        btnGroup.className = 'button-group';
+            if (intervals[rowIndex][spellIndex]) clearInterval(intervals[rowIndex][spellIndex]);
 
-        if (i === 2) {
-            // 세 번째 줄 (5개 버튼)
-            specialButtons.forEach(data => {
-                btnGroup.appendChild(createImageButton(data, i));
-            });
-        } else {
-            // 나머지 줄 (4개 버튼)
-            standardButtons.forEach(data => {
-                btnGroup.appendChild(createImageButton(data, i));
+            intervals[rowIndex][spellIndex] = setInterval(() => {
+                if (timeStates[rowIndex][spellIndex] > 0) {
+                    timeStates[rowIndex][spellIndex]--;
+                    updateDisplay(rowIndex, spellIndex);
+                } else {
+                    clearInterval(intervals[rowIndex][spellIndex]);
+                    intervals[rowIndex][spellIndex] = null;
+                }
+            }, 1000);
+        }
+
+        function createImageButton(imgData, rowIndex, spellIndex) {
+            const btn = document.createElement('button');
+            const img = document.createElement('img');
+
+            let imageFileName = "";
+
+            // 이미지 결정 로직
+            if (imgData.index === 2) {
+                // 기본 쿨타임(2번 인덱스) -> 스펠 고유 이미지 (예: flash.png)
+                imageFileName = spellFileMap[imgData.originName] || 'flash';
+            } else {
+                // 그 외(3번 이상) -> 고정된 룬/템 이미지 사용 (예: 273.png)
+                // 실제 쿨타임(sec)은 스펠마다 다르지만, 이미지는 공통된 것을 사용
+                const fixedName = FIXED_IMAGE_MAP[imgData.index];
+                imageFileName = fixedName ? fixedName : imgData.name;
+            }
+
+            img.src = `images/${imageFileName}.png`;
+            img.alt = `${imgData.originName} ${imgData.sec}`;
+
+            img.onerror = () => {
+                btn.innerText = imgData.sec;
+                img.style.display = 'none';
+            };
+
+            btn.onclick = () => setAndStartTimer(rowIndex, spellIndex, imgData.sec);
+            btn.appendChild(img);
+            return btn;
+        }
+
+        // 특정 줄의 버튼들을 스펠에 맞춰 업데이트 (ID 찾는 방식 제거, 직접 요소 전달)
+        function updateSpellButtons(containerElement, spellName) {
+            const rowData = spellDataMap[spellName];
+            if (!rowData) return;
+
+            containerElement.innerHTML = '';
+
+            let indices = [];
+            // Special Row (index 2 - 3번째 줄)만 5개 버튼, 나머지는 4개
+            // containerElement의 부모의 부모(row)의 index를 알 수 없으므로,
+            // 쿨하게 데이터 속성(dataset)을 활용하거나, 그냥 간단히 모든 줄에 5개 다 띄우고 빈 건 안 만드는 식으로 처리.
+            // 하지만 정확성을 위해 data-row-index를 추가하는 게 좋음.
+
+            const rowIndex = parseInt(containerElement.dataset.rowIndex);
+
+            if (rowIndex === 2) {
+                indices = [2, 3, 5, 6, 7];
+            } else {
+                indices = [2, 3, 4, 6];
+            }
+
+            // spellIndex는 타이머 식별을 위해 필요함. dataset에서 가져옴.
+            const spellIndex = parseInt(containerElement.dataset.spellIndex);
+
+            indices.forEach(idx => {
+                if (rowData[idx]) {
+                    const secVal = parseInt(rowData[idx]);
+                    if (!isNaN(secVal)) {
+                        const data = {
+                            name: rowData[idx],
+                            sec: secVal,
+                            originName: spellName,
+                            index: idx
+                        };
+                        containerElement.appendChild(createImageButton(data, rowIndex, spellIndex));
+                    }
+                }
             });
         }
 
-        rowDiv.appendChild(btnGroup);
-        container.appendChild(rowDiv);
-    }
-</script>
+        function createTimerGrid() {
+            container.innerHTML = '';
+
+            for (let i = 0; i < rowsCount; i++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row';
+
+                // 한 줄에 2개의 스펠 그룹 생성
+                for (let j = 0; j < 2; j++) {
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = 'spell-group';
+
+                    // 3. 버튼 리스트 (먼저 생성해서 참조를 유지)
+                    const btnGroup = document.createElement('div');
+                    btnGroup.className = 'button-group';
+                    btnGroup.id = `btn-group-${i}-${j}`;
+                    // 데이터 속성으로 인덱스 저장 (update 함수에서 쓰기 위해)
+                    btnGroup.dataset.rowIndex = i;
+                    btnGroup.dataset.spellIndex = j;
+
+                    // 1. 드롭다운
+                    const select = document.createElement('select');
+                    select.className = 'spell-selector';
+                    Object.keys(spellDataMap).forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.innerText = name;
+                        if (name === '점멸') option.selected = true;
+                        select.appendChild(option);
+                    });
+
+                    // 변경 시 버튼 업데이트 (btnGroup 요소를 직접 넘김)
+                    select.onchange = (e) => updateSpellButtons(btnGroup, e.target.value);
+                    groupDiv.appendChild(select);
+
+                    // 2. 시간 (000 포맷)
+                    const timeSpan = document.createElement('span');
+                    timeSpan.id = `time-${i}-${j}`;
+                    timeSpan.className = 'time-display';
+                    timeSpan.innerText = "000";
+                    groupDiv.appendChild(timeSpan);
+
+                    // 버튼 그룹 추가
+                    groupDiv.appendChild(btnGroup);
+
+                    rowDiv.appendChild(groupDiv);
+
+                    // 초기화 (점멸) - btnGroup 요소를 직접 전달
+                    updateSpellButtons(btnGroup, '점멸');
+                }
+
+                container.appendChild(rowDiv);
+            }
+        }
+
+        init();
+    </script>
 
 </body>
-</html>
