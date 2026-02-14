@@ -3,90 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time Manager v2</title>
+    <title>Time Manager v3</title>
     <style>
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #1a1a1a;
-            color: #ffffff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .container {
-            background-color: #2a2a2a;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        .row {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background-color: #333;
-            padding: 10px;
-            border-radius: 8px;
-        }
-        .selectors-group {
-            display: flex;
-            gap: 5px;
-        }
-        .spell-selector, .boost-selector {
-            background-color: #222;
-            color: #fff;
-            border: 1px solid #555;
-            padding: 5px;
-            border-radius: 5px;
-            font-size: 0.85rem;
-            cursor: pointer;
-        }
-        .spell-selector { width: 80px; }
-        .boost-selector { width: 130px; }
-
-        .timer-unit {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 120px;
-        }
-        .time-display {
-            font-size: 1.5rem;
-            font-weight: bold;
-            width: 55px;
-            text-align: center;
-            color: #00ffcc;
-        }
-        button {
-            width: 44px;
-            height: 44px;
-            padding: 0;
-            cursor: pointer;
-            background-color: #444;
-            border: 2px solid #666;
-            border-radius: 8px;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        body { font-family: 'Courier New', Courier, monospace; background-color: #1a1a1a; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background-color: #2a2a2a; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; }
+        .row { display: flex; align-items: center; gap: 15px; background-color: #333; padding: 10px; border-radius: 8px; }
+        .selectors-group { display: flex; gap: 5px; }
+        .spell-selector, .boost-selector { background-color: #222; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 5px; font-size: 0.85rem; cursor: pointer; }
+        .spell-selector { width: 90px; } .boost-selector { width: 130px; }
+        .timer-unit { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+        .time-display { font-size: 1.5rem; font-weight: bold; width: 55px; text-align: center; color: #00ffcc; }
+        button { width: 44px; height: 44px; padding: 0; cursor: pointer; background-color: #444; border: 2px solid #666; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
         button img { width: 100%; height: 100%; object-fit: cover; }
         button:hover { border-color: #00ffcc; }
         button:active { transform: scale(0.95); }
+        .tp-7m { border-color: #ffcc00; } /* 7분 텔포 전용 강조 */
     </style>
 </head>
 <body>
-
     <div class="container" id="time-container"></div>
-
     <script>
         const rowsCount = 5;
-        let timeStates = Array.from({ length: 5 }, () => [0, 0]);
-        let intervals = Array.from({ length: 5 }, () => [null, null]);
+        let timeStates = Array.from({ length: 5 }, () => [0, 0, 0]); // 3번째는 7분 텔포용
+        let intervals = Array.from({ length: 5 }, () => [null, null, null]);
         let spellDataMap = {};
 
         const spellFileMap = {
@@ -99,32 +38,31 @@
         async function init() {
             try {
                 const response = await fetch('data/SummonerSpellData.csv');
-                const data = await response.text();
-                const rows = data.split('\n').filter(row => row.trim() !== '').map(row => row.split(','));
+                const dataText = await response.text();
+                const rows = dataText.split('\n').filter(r => r.trim() !== '').map(r => r.split(','));
 
                 rows.forEach(row => {
-                    if (row.length > 2) spellDataMap[row[0].trim()] = row;
+                    const name = row[0].trim();
+                    // 드롭박스 필터링: 가속 관련 항목, 퀘스트, 빈칸 제외
+                    if (name && !name.includes('가속') && !name.includes('퀘스트') && spellFileMap[name]) {
+                        spellDataMap[name] = row;
+                    }
                 });
-
                 createTimerGrid();
-            } catch (error) {
-                console.error("CSV 로드 실패:", error);
-                container.innerText = "데이터를 불러올 수 없어 오빠 ㅠㅠ";
-            }
+            } catch (e) { container.innerText = "데이터 로드 실패!"; }
         }
 
-        function formatTime(sec) { return sec.toString().padStart(3, '0'); }
-
-        function startTimer(r, s, sec) {
+        function startTimer(r, s, sec, customId = null) {
+            const id = customId || `time-${r}-${s}`;
             if (intervals[r][s]) clearInterval(intervals[r][s]);
             timeStates[r][s] = sec;
-            const display = document.getElementById(`time-${r}-${s}`);
-            display.innerText = formatTime(sec);
+            const display = document.getElementById(id);
+            display.innerText = sec.toString().padStart(3, '0');
 
             intervals[r][s] = setInterval(() => {
                 if (timeStates[r][s] > 0) {
                     timeStates[r][s]--;
-                    display.innerText = formatTime(timeStates[r][s]);
+                    display.innerText = timeStates[r][s].toString().padStart(3, '0');
                 } else {
                     clearInterval(intervals[r][s]);
                     intervals[r][s] = null;
@@ -138,53 +76,59 @@
                 const row = document.createElement('div');
                 row.className = 'row';
 
-                // 1. 선택 그룹 (주문1, 주문2, 가속)
-                const selectors = document.createElement('div');
-                selectors.className = 'selectors-group';
+                // 주문 1 기본값 설정
+                let defaultS1 = '점멸';
+                if (i === 0 || i === 2) defaultS1 = '순간이동';
+                else if (i === 3) defaultS1 = '방어막';
+                else if (i === 4) defaultS1 = '회복';
 
-                const s1 = createSelect(i, 0);
-                const s2 = createSelect(i, 1);
+                // 가속 드롭다운 생성
                 const boost = document.createElement('select');
                 boost.className = 'boost-selector';
-                boost.id = `boost-${i}`;
+                const boostOpts = i === 2 ? [['2','기본'],['3','신발'],['5','미장'],['6','신+우'],['7','미+우']] : [['2','기본'],['3','신발'],['4','우통'],['6','신+우']];
+                boostOpts.forEach(o => { const opt = document.createElement('option'); opt.value = o[0]; opt.innerText = o[1]; boost.appendChild(opt); });
 
-                const options = i === 2 
-                    ? [['2', '기본'], ['3', '신발'], ['5', '미장'], ['6', '신발+우통'], ['7', '미장+우통']]
-                    : [['2', '기본'], ['3', '신발'], ['4', '우통'], ['6', '신발+우통']];
+                if (i === 1) { // 두 번째 줄: 점멸 하나만 남기기
+                    const unit = createTimerUnit(i, 1);
+                    row.innerHTML = `<div class="selectors-group"></div>`;
+                    row.querySelector('.selectors-group').appendChild(boost);
+                    row.append(unit);
+                    updateButton(i, 1, '점멸', boost.value);
+                    boost.onchange = () => updateButton(i, 1, '점멸', boost.value);
+                } else {
+                    const s1 = createSelect(defaultS1);
+                    const s2 = createSelect('점멸'); // 주문 2 기본값 점멸
+                    const selectors = document.createElement('div');
+                    selectors.className = 'selectors-group';
+                    selectors.append(s1, s2, boost);
 
-                options.forEach(opt => {
-                    const o = document.createElement('option');
-                    o.value = opt[0]; o.innerText = opt[1];
-                    boost.appendChild(o);
-                });
+                    const unit1 = createTimerUnit(i, 0);
+                    const unit2 = createTimerUnit(i, 1);
+                    row.append(selectors, unit1, unit2);
 
-                selectors.append(s1, s2, boost);
+                    // 첫 번째 줄 특수 구성: 7분 텔포 추가
+                    if (i === 0) {
+                        const tp7Unit = document.createElement('div');
+                        tp7Unit.className = 'timer-unit';
+                        tp7Unit.innerHTML = `<span class="time-display" id="time-0-tp7">420</span><button class="tp-7m" onclick="startTimer(0, 2, 420, 'time-0-tp7')"><img src="images/teleport.png"></button>`;
+                        row.appendChild(tp7Unit);
+                    }
 
-                // 2. 타이머 유닛 (1, 2)
-                const timer1 = createTimerUnit(i, 0);
-                const timer2 = createTimerUnit(i, 1);
-
-                row.append(selectors, timer1, timer2);
+                    const update = () => { updateButton(i, 0, s1.value, boost.value); updateButton(i, 1, s2.value, boost.value); };
+                    s1.onchange = s2.onchange = boost.onchange = update;
+                    update();
+                }
                 container.appendChild(row);
-
-                // 초기화 이벤트
-                const update = () => {
-                    updateButton(i, 0, s1.value, boost.value);
-                    updateButton(i, 1, s2.value, boost.value);
-                };
-                s1.onchange = s2.onchange = boost.onchange = update;
-                update();
             }
         }
 
-        function createSelect(r, s) {
+        function createSelect(def) {
             const sel = document.createElement('select');
             sel.className = 'spell-selector';
             Object.keys(spellDataMap).forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name; opt.innerText = name;
-                if(s === 0 && name === '점멸') opt.selected = true;
-                if(s === 1 && name === '유체화') opt.selected = true;
+                if (name === def) opt.selected = true;
                 sel.appendChild(opt);
             });
             return sel;
@@ -197,20 +141,16 @@
             return div;
         }
 
-        function updateButton(r, s, spellName, boostIdx) {
+        function updateButton(r, s, name, bIdx) {
             const cont = document.getElementById(`btn-container-${r}-${s}`);
+            if (!cont) return;
             cont.innerHTML = '';
-            const data = spellDataMap[spellName];
-            const sec = parseInt(data[boostIdx]);
-
+            const sec = parseInt(spellDataMap[name][bIdx]);
             const btn = document.createElement('button');
-            const img = document.createElement('img');
-            img.src = `images/${spellFileMap[spellName]}.png`;
+            btn.innerHTML = `<img src="images/${spellFileMap[name]}.png">`;
             btn.onclick = () => startTimer(r, s, sec);
-            btn.appendChild(img);
             cont.appendChild(btn);
         }
-
         init();
     </script>
 </body>
