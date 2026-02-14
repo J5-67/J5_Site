@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time Manager</title>
+    <title>Time Manager v2</title>
     <style>
         body {
             font-family: 'Courier New', Courier, monospace;
@@ -16,305 +15,203 @@
             min-height: 100vh;
             margin: 0;
         }
-
         .container {
             background-color: #2a2a2a;
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
-
         .row {
             display: flex;
             align-items: center;
-            gap: 20px;
-            /* 스펠 그룹 간 간격 */
+            gap: 15px;
             background-color: #333;
             padding: 10px;
             border-radius: 8px;
         }
-
-        /* 하나의 스펠 세트 (드롭다운 + 시간 + 버튼들) */
-        .spell-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .time-display {
-            font-size: 1.5rem;
-            font-weight: bold;
-            width: 60px;
-            /* 너비 조정 */
-            text-align: center;
-            color: #00ffcc;
-        }
-
-        .button-group {
+        .selectors-group {
             display: flex;
             gap: 5px;
         }
-
-        button {
-            padding: 0;
-            cursor: pointer;
-            background-color: #444;
-            color: white;
-            border: 2px solid #666;
-            border-radius: 8px;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 44px;
-            height: 44px;
-            overflow: hidden;
-        }
-
-        button img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        button:hover {
-            background-color: #00ffcc;
-            border-color: #00ffcc;
-        }
-
-        button:active {
-            transform: scale(0.95);
-        }
-
-        .spell-selector {
+        .spell-selector, .boost-selector {
             background-color: #222;
             color: #fff;
             border: 1px solid #555;
             padding: 5px;
             border-radius: 5px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             cursor: pointer;
-            width: 80px;
         }
+        .spell-selector { width: 80px; }
+        .boost-selector { width: 130px; }
+
+        .timer-unit {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 120px;
+        }
+        .time-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            width: 55px;
+            text-align: center;
+            color: #00ffcc;
+        }
+        button {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            cursor: pointer;
+            background-color: #444;
+            border: 2px solid #666;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button img { width: 100%; height: 100%; object-fit: cover; }
+        button:hover { border-color: #00ffcc; }
+        button:active { transform: scale(0.95); }
     </style>
 </head>
-
 <body>
 
     <div class="container" id="time-container"></div>
 
     <script>
         const rowsCount = 5;
-        // 2차원 배열로 변경: [행][스펠칸(0,1)]
-        let timeStates = [];
-        let intervals = [];
-
-        let spellDataMap = {}; // 전체 스펠 데이터
+        let timeStates = Array.from({ length: 5 }, () => [0, 0]);
+        let intervals = Array.from({ length: 5 }, () => [null, null]);
+        let spellDataMap = {};
 
         const spellFileMap = {
             '점멸': 'flash', '유체화': 'ghost', '회복': 'heal', '탈진': 'exhaust',
             '방어막': 'barrier', '점화': 'ignite', '정화': 'cleanse', '순간이동': 'teleport'
         };
 
-        // CSV 인덱스별 고정 이미지 매핑 (기본 제외 나머지 버튼)
-        // 3: 장화(273), 4: 우통(254), 5: 미장(250), 6: 장화+우통(234), 7: 미장+우통(217)
-        const FIXED_IMAGE_MAP = {
-            3: '273',
-            4: '254',
-            5: '250',
-            6: '234',
-            7: '217'
-        };
-
         const container = document.getElementById('time-container');
-
-        // 초기화 시 배열 생성
-        for (let i = 0; i < rowsCount; i++) {
-            timeStates.push([0, 0]);
-            intervals.push([null, null]);
-        }
 
         async function init() {
             try {
                 const response = await fetch('data/SummonerSpellData.csv');
                 const data = await response.text();
-                const rows = data.split('\n').map(row => row.split(','));
+                const rows = data.split('\n').filter(row => row.trim() !== '').map(row => row.split(','));
 
                 rows.forEach(row => {
-                    if (row.length > 2 && row[1]) {
-                        const spellName = row[0].trim();
-                        if (spellFileMap[spellName]) {
-                            spellDataMap[spellName] = row;
-                        }
-                    }
+                    if (row.length > 2) spellDataMap[row[0].trim()] = row;
                 });
 
                 createTimerGrid();
-
             } catch (error) {
-                console.error("CSV 로드 중 오류 발생:", error);
-                container.innerText = "데이터 로드 실패";
+                console.error("CSV 로드 실패:", error);
+                container.innerText = "데이터를 불러올 수 없어 오빠 ㅠㅠ";
             }
         }
 
-        function formatTime(totalSeconds) {
-            // 초 단위 (000) 포맷
-            return totalSeconds.toString().padStart(3, '0');
-        }
+        function formatTime(sec) { return sec.toString().padStart(3, '0'); }
 
-        function updateDisplay(rowIndex, spellIndex) {
-            const timeElement = document.getElementById(`time-${rowIndex}-${spellIndex}`);
-            if (timeElement) {
-                timeElement.innerText = formatTime(timeStates[rowIndex][spellIndex]);
-            }
-        }
+        function startTimer(r, s, sec) {
+            if (intervals[r][s]) clearInterval(intervals[r][s]);
+            timeStates[r][s] = sec;
+            const display = document.getElementById(`time-${r}-${s}`);
+            display.innerText = formatTime(sec);
 
-        function setAndStartTimer(rowIndex, spellIndex, seconds) {
-            timeStates[rowIndex][spellIndex] = seconds;
-            updateDisplay(rowIndex, spellIndex);
-
-            if (intervals[rowIndex][spellIndex]) clearInterval(intervals[rowIndex][spellIndex]);
-
-            intervals[rowIndex][spellIndex] = setInterval(() => {
-                if (timeStates[rowIndex][spellIndex] > 0) {
-                    timeStates[rowIndex][spellIndex]--;
-                    updateDisplay(rowIndex, spellIndex);
+            intervals[r][s] = setInterval(() => {
+                if (timeStates[r][s] > 0) {
+                    timeStates[r][s]--;
+                    display.innerText = formatTime(timeStates[r][s]);
                 } else {
-                    clearInterval(intervals[rowIndex][spellIndex]);
-                    intervals[rowIndex][spellIndex] = null;
+                    clearInterval(intervals[r][s]);
+                    intervals[r][s] = null;
                 }
             }, 1000);
         }
 
-        function createImageButton(imgData, rowIndex, spellIndex) {
-            const btn = document.createElement('button');
-            const img = document.createElement('img');
-
-            let imageFileName = "";
-
-            // 이미지 결정 로직
-            if (imgData.index === 2) {
-                // 기본 쿨타임(2번 인덱스) -> 스펠 고유 이미지 (예: flash.png)
-                imageFileName = spellFileMap[imgData.originName] || 'flash';
-            } else {
-                // 그 외(3번 이상) -> 고정된 룬/템 이미지 사용 (예: 273.png)
-                // 실제 쿨타임(sec)은 스펠마다 다르지만, 이미지는 공통된 것을 사용
-                const fixedName = FIXED_IMAGE_MAP[imgData.index];
-                imageFileName = fixedName ? fixedName : imgData.name;
-            }
-
-            img.src = `images/${imageFileName}.png`;
-            img.alt = `${imgData.originName} ${imgData.sec}`;
-
-            img.onerror = () => {
-                btn.innerText = imgData.sec;
-                img.style.display = 'none';
-            };
-
-            btn.onclick = () => setAndStartTimer(rowIndex, spellIndex, imgData.sec);
-            btn.appendChild(img);
-            return btn;
-        }
-
-        // 특정 줄의 버튼들을 스펠에 맞춰 업데이트 (ID 찾는 방식 제거, 직접 요소 전달)
-        function updateSpellButtons(containerElement, spellName) {
-            const rowData = spellDataMap[spellName];
-            if (!rowData) return;
-
-            containerElement.innerHTML = '';
-
-            let indices = [];
-            // Special Row (index 2 - 3번째 줄)만 5개 버튼, 나머지는 4개
-            // containerElement의 부모의 부모(row)의 index를 알 수 없으므로,
-            // 쿨하게 데이터 속성(dataset)을 활용하거나, 그냥 간단히 모든 줄에 5개 다 띄우고 빈 건 안 만드는 식으로 처리.
-            // 하지만 정확성을 위해 data-row-index를 추가하는 게 좋음.
-
-            const rowIndex = parseInt(containerElement.dataset.rowIndex);
-
-            if (rowIndex === 2) {
-                indices = [2, 3, 5, 6, 7];
-            } else {
-                indices = [2, 3, 4, 6];
-            }
-
-            // spellIndex는 타이머 식별을 위해 필요함. dataset에서 가져옴.
-            const spellIndex = parseInt(containerElement.dataset.spellIndex);
-
-            indices.forEach(idx => {
-                if (rowData[idx]) {
-                    const secVal = parseInt(rowData[idx]);
-                    if (!isNaN(secVal)) {
-                        const data = {
-                            name: rowData[idx],
-                            sec: secVal,
-                            originName: spellName,
-                            index: idx
-                        };
-                        containerElement.appendChild(createImageButton(data, rowIndex, spellIndex));
-                    }
-                }
-            });
-        }
-
         function createTimerGrid() {
             container.innerHTML = '';
-
             for (let i = 0; i < rowsCount; i++) {
-                const rowDiv = document.createElement('div');
-                rowDiv.className = 'row';
+                const row = document.createElement('div');
+                row.className = 'row';
 
-                // 한 줄에 2개의 스펠 그룹 생성
-                for (let j = 0; j < 2; j++) {
-                    const groupDiv = document.createElement('div');
-                    groupDiv.className = 'spell-group';
+                // 1. 선택 그룹 (주문1, 주문2, 가속)
+                const selectors = document.createElement('div');
+                selectors.className = 'selectors-group';
 
-                    // 3. 버튼 리스트 (먼저 생성해서 참조를 유지)
-                    const btnGroup = document.createElement('div');
-                    btnGroup.className = 'button-group';
-                    btnGroup.id = `btn-group-${i}-${j}`;
-                    // 데이터 속성으로 인덱스 저장 (update 함수에서 쓰기 위해)
-                    btnGroup.dataset.rowIndex = i;
-                    btnGroup.dataset.spellIndex = j;
+                const s1 = createSelect(i, 0);
+                const s2 = createSelect(i, 1);
+                const boost = document.createElement('select');
+                boost.className = 'boost-selector';
+                boost.id = `boost-${i}`;
 
-                    // 1. 드롭다운
-                    const select = document.createElement('select');
-                    select.className = 'spell-selector';
-                    Object.keys(spellDataMap).forEach(name => {
-                        const option = document.createElement('option');
-                        option.value = name;
-                        option.innerText = name;
-                        if (name === '점멸') option.selected = true;
-                        select.appendChild(option);
-                    });
+                const options = i === 2 
+                    ? [['2', '기본'], ['3', '신발'], ['5', '미장'], ['6', '신발+우통'], ['7', '미장+우통']]
+                    : [['2', '기본'], ['3', '신발'], ['4', '우통'], ['6', '신발+우통']];
 
-                    // 변경 시 버튼 업데이트 (btnGroup 요소를 직접 넘김)
-                    select.onchange = (e) => updateSpellButtons(btnGroup, e.target.value);
-                    groupDiv.appendChild(select);
+                options.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt[0]; o.innerText = opt[1];
+                    boost.appendChild(o);
+                });
 
-                    // 2. 시간 (000 포맷)
-                    const timeSpan = document.createElement('span');
-                    timeSpan.id = `time-${i}-${j}`;
-                    timeSpan.className = 'time-display';
-                    timeSpan.innerText = "000";
-                    groupDiv.appendChild(timeSpan);
+                selectors.append(s1, s2, boost);
 
-                    // 버튼 그룹 추가
-                    groupDiv.appendChild(btnGroup);
+                // 2. 타이머 유닛 (1, 2)
+                const timer1 = createTimerUnit(i, 0);
+                const timer2 = createTimerUnit(i, 1);
 
-                    rowDiv.appendChild(groupDiv);
+                row.append(selectors, timer1, timer2);
+                container.appendChild(row);
 
-                    // 초기화 (점멸) - btnGroup 요소를 직접 전달
-                    updateSpellButtons(btnGroup, '점멸');
-                }
-
-                container.appendChild(rowDiv);
+                // 초기화 이벤트
+                const update = () => {
+                    updateButton(i, 0, s1.value, boost.value);
+                    updateButton(i, 1, s2.value, boost.value);
+                };
+                s1.onchange = s2.onchange = boost.onchange = update;
+                update();
             }
+        }
+
+        function createSelect(r, s) {
+            const sel = document.createElement('select');
+            sel.className = 'spell-selector';
+            Object.keys(spellDataMap).forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name; opt.innerText = name;
+                if(s === 0 && name === '점멸') opt.selected = true;
+                if(s === 1 && name === '유체화') opt.selected = true;
+                sel.appendChild(opt);
+            });
+            return sel;
+        }
+
+        function createTimerUnit(r, s) {
+            const div = document.createElement('div');
+            div.className = 'timer-unit';
+            div.innerHTML = `<span class="time-display" id="time-${r}-${s}">000</span><div id="btn-container-${r}-${s}"></div>`;
+            return div;
+        }
+
+        function updateButton(r, s, spellName, boostIdx) {
+            const cont = document.getElementById(`btn-container-${r}-${s}`);
+            cont.innerHTML = '';
+            const data = spellDataMap[spellName];
+            const sec = parseInt(data[boostIdx]);
+
+            const btn = document.createElement('button');
+            const img = document.createElement('img');
+            img.src = `images/${spellFileMap[spellName]}.png`;
+            btn.onclick = () => startTimer(r, s, sec);
+            btn.appendChild(img);
+            cont.appendChild(btn);
         }
 
         init();
     </script>
-
 </body>
+</html>
