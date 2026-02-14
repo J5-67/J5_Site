@@ -35,16 +35,23 @@
             '방어막': 'barrier', '점화': 'ignite', '정화': 'cleanse', '순간이동': 'teleport'
         };
 
-        // 주문별 테두리 색상 매핑
+        // 주문별 테두리 색상 매핑 (오빠 요청 반영!)
         const spellColorMap = {
-            '점멸': '#ffcc00', '유체화': '#00ccff', '회복': '#00ccff', '정화': '#00ccff',
-            '점화': '#ff4d4d', '방어막': '#ff4d4d', '탈진': '#2ecc71', '순간이동': '#9b4dff'
+            '점멸': '#ffcc00', 
+            '유체화': '#00ccff', 
+            '회복': '#adff2f', // 연두색 (GreenYellow)
+            '탈진': '#ff8c00', // 주황색 (DarkOrange)
+            '방어막': '#ffff00', // 노란색 (Yellow)
+            '정화': '#00ccff',
+            '점화': '#ff4d4d', 
+            '순간이동': '#9b4dff'
         };
 
         const container = document.getElementById('time-container');
 
         async function init() {
             try {
+                // [유니] 데이터 로딩 순서가 중요해!
                 const response = await fetch('data/SummonerSpellData.csv');
                 const dataText = await response.text();
                 const rows = dataText.split('\n').filter(r => r.trim() !== '').map(r => r.split(','));
@@ -55,8 +62,13 @@
                         spellDataMap[name] = row;
                     }
                 });
+                
+                // 데이터가 맵에 다 들어온 후에 그리드를 그려야 초기 버튼이 보여!
                 createTimerGrid();
-            } catch (e) { container.innerText = "데이터 로드 실패!"; }
+            } catch (e) { 
+                container.innerText = "데이터 로드 실패!"; 
+                console.error(e);
+            }
         }
 
         function startTimer(r, s, sec, displayId) {
@@ -99,14 +111,16 @@
                     selectors.appendChild(boost);
                     rightGroup.appendChild(createTimerUnit(i, 1));
                     row.append(selectors, rightGroup);
+                    
+                    // [유니] 함수 정의 후 즉시 호출해서 초기 버튼 생성!
                     const upd = () => updateBtn(i, 1, '점멸', boost.value);
-                    boost.onchange = upd; upd();
+                    boost.onchange = upd; 
+                    upd(); 
                 } else {
                     const s1 = createSelect(def1);
                     const s2 = createSelect('점멸');
                     selectors.append(s1, s2, boost);
 
-                    // 첫 번째 줄 특수 배치: 1. 강화텔포, 2. 주문1, 3. 주문2
                     if (i === 0) {
                         const unit7 = document.createElement('div');
                         unit7.className = 'timer-unit';
@@ -117,8 +131,13 @@
                     }
                     row.append(selectors, rightGroup);
 
-                    const upd = () => { updateBtn(i, 0, s1.value, boost.value); updateBtn(i, 1, s2.value, boost.value); };
-                    s1.onchange = s2.onchange = boost.onchange = upd; upd();
+                    // [유니] 함수 정의 후 즉시 호출해서 초기 버튼 생성!
+                    const upd = () => { 
+                        updateBtn(i, 0, s1.value, boost.value); 
+                        updateBtn(i, 1, s2.value, boost.value); 
+                    };
+                    s1.onchange = s2.onchange = boost.onchange = upd; 
+                    upd(); 
                 }
                 container.appendChild(row);
             }
@@ -146,13 +165,19 @@
             const box = document.getElementById(`btn-box-${r}-${s}`);
             if (!box) return;
             box.innerHTML = '';
+            
+            // 데이터가 로드되지 않았을 경우를 대비한 안전 장치
+            if (!spellDataMap[name]) return;
+
             const sec = parseInt(spellDataMap[name][bIdx]);
             const btn = document.createElement('button');
-            btn.style.borderColor = spellColorMap[name] || '#666'; // 컬러 매핑 적용
+            btn.style.borderColor = spellColorMap[name] || '#666'; 
             btn.innerHTML = `<img src="images/${spellFileMap[name]}.png">`;
             btn.onclick = () => startTimer(r, s, sec, `time-${r}-${s}`);
             box.appendChild(btn);
         }
+        
+        // [유니] 페이지 로드 완료 후 실행!
         init();
     </script>
 </body>
