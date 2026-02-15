@@ -3,76 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time Manager Final - Yuni Edition</title>
+    <title>Yuni's LoL Spell Manager (Riot API)</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background-color: #1a1a1a; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { background-color: #2a2a2a; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; }
-        .row { display: flex; align-items: center; justify-content: space-between; gap: 15px; background-color: #333; padding: 10px; border-radius: 8px; min-width: 650px; }
+        .container { background-color: #2a2a2a; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 10px; }
         
+        /* 검색창 스타일 */
+        .search-box { margin-bottom: 10px; display: flex; gap: 8px; justify-content: center; padding: 10px; background: #333; border-radius: 8px; }
+        .search-box input { padding: 6px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; font-size: 0.9rem; }
+        .search-btn { padding: 6px 15px; background: #00ffcc; color: #1a1a1a; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
+
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 15px; background-color: #333; padding: 10px; border-radius: 8px; min-width: 650px; }
         .right-aligned-group { display: flex; align-items: center; gap: 20px; margin-left: auto; }
         .selectors-group { display: flex; gap: 5px; }
         .spell-selector, .boost-selector { background-color: #222; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 5px; font-size: 0.85rem; cursor: pointer; }
         .spell-selector { width: 90px; } .boost-selector { width: 110px; }
-
         .timer-unit { display: flex; align-items: center; gap: 8px; }
         .time-display { font-size: 1.5rem; font-weight: bold; width: 55px; text-align: center; color: #00ffcc; }
-        
         button { width: 44px; height: 44px; padding: 0; cursor: pointer; background-color: #444; border: 2px solid #666; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; transition: border-color 0.3s; }
         button img { width: 100%; height: 100%; object-fit: cover; }
         button:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
-    <div class="container" id="time-container"></div>
+    <div class="container">
+        <div class="search-box">
+            <input type="text" id="summoner-name" placeholder="소환사명" style="width: 120px;">
+            <input type="text" id="tag-line" placeholder="KR1" style="width: 60px;">
+            <button class="search-btn" onclick="fetchGameInfo()">정보 가져오기</button>
+        </div>
+        
+        <div id="time-container"></div>
+    </div>
+
     <script>
         const rowsCount = 5;
         let timeStates = Array.from({ length: 5 }, () => [0, 0, 0]);
         let intervals = Array.from({ length: 5 }, () => [null, null, null]);
         let spellDataMap = {};
 
-        const spellFileMap = {
-            '점멸': 'flash', '유체화': 'ghost', '회복': 'heal', '탈진': 'exhaust',
-            '방어막': 'barrier', '점화': 'ignite', '정화': 'cleanse', '순간이동': 'teleport'
-        };
-
-        const spellColorMap = {
-            '점멸': '#ffcc00', 
-            '유체화': '#00ccff', 
-            '회복': '#adff2f', // 연두색
-            '탈진': '#ff8c00', // 주황색
-            '방어막': '#ffff00', // 노란색
-            '정화': '#00ccff',
-            '점화': '#ff4d4d', 
-            '순간이동': '#9b4dff'
-        };
+        // 라이엇 API ID와 한글 명칭 매핑
+        const riotSpellMap = { 21: "방어막", 1: "정화", 14: "점화", 3: "탈진", 4: "점멸", 6: "유체화", 7: "회복", 12: "순간이동" };
+        const spellFileMap = { '점멸': 'flash', '유체화': 'ghost', '회복': 'heal', '탈진': 'exhaust', '방어막': 'barrier', '점화': 'ignite', '정화': 'cleanse', '순간이동': 'teleport' };
+        const spellColorMap = { '점멸': '#ffcc00', '유체화': '#00ccff', '회복': '#adff2f', '탈진': '#ff8c00', '방어막': '#ffff00', '정화': '#00ccff', '점화': '#ff4d4d', '순간이동': '#9b4dff' };
 
         const container = document.getElementById('time-container');
 
-        // [유니] 데이터 로딩과 UI 생성을 확실히 순서대로 맞췄어!
         async function init() {
             try {
                 const response = await fetch('data/SummonerSpellData.csv');
-                if (!response.ok) throw new Error("파일을 찾을 수 없어!");
-                
+                if (!response.ok) throw new Error("CSV 파일을 찾을 수 없어!");
                 const dataText = await response.text();
                 const rows = dataText.split('\n').filter(r => r.trim() !== '').map(r => r.split(','));
-
                 rows.forEach(row => {
                     const name = row[0].trim();
                     if (name && !name.includes('가속') && !name.includes('퀘스트') && spellFileMap[name]) {
                         spellDataMap[name] = row;
                     }
                 });
+                createTimerGrid();
+            } catch (e) { container.innerText = "데이터 로드 실패!"; console.error(e); }
+        }
 
-                if (Object.keys(spellDataMap).length > 0) {
-                    createTimerGrid();
-                } else {
-                    console.error("데이터 맵이 비어있어, 오빠!");
-                }
-            } catch (e) { 
-                container.innerText = "데이터 로드 실패! 경로를 확인해줘 오빠!";
-                console.error(e);
-            }
+        // 라이엇 API 호출 및 자동 세팅 함수
+        async function fetchGameInfo() {
+            const name = document.getElementById('summoner-name').value;
+            const tag = document.getElementById('tag-line').value;
+            if (!name || !tag) { alert("소환사명과 태그를 입력해줘 오빠! 🥺"); return; }
+
+            try {
+                const response = await fetch(`/api/get-summoner-spells?summonerName=${encodeURIComponent(name)}&tagLine=${encodeURIComponent(tag)}`);
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                // 검색한 소환사가 속한 팀의 반대 팀(상대방) 찾기
+                const myPuuid = data.puuid; 
+                const myParticipant = data.participants.find(p => p.puuid === myPuuid || p.summonerName.includes(name));
+                const enemyTeamId = myParticipant.teamId === 100 ? 200 : 100;
+                const enemies = data.participants.filter(p => p.teamId === enemyTeamId);
+
+                // 상대방 5명의 스펠을 순서대로 드롭박스에 주입
+                enemies.forEach((enemy, idx) => {
+                    if (idx < 5) {
+                        const s1Name = riotSpellMap[enemy.spell1Id] || "점멸";
+                        const s2Name = riotSpellMap[enemy.spell2Id] || "점멸";
+                        
+                        const s1Select = document.getElementById(`sel-${idx}-0`);
+                        const s2Select = document.getElementById(`sel-${idx}-1`);
+                        
+                        if (s1Select && s2Select) {
+                            s1Select.value = s1Name;
+                            s2Select.value = s2Name;
+                            s1Select.dispatchEvent(new Event('change'));
+                        }
+                    }
+                });
+                alert("상대방 스펠 동기화 완료! 🔥");
+            } catch (e) { alert("게임 정보를 가져오지 못했어. (만료된 키 혹은 잘못된 닉네임)"); }
         }
 
         function startTimer(r, s, sec, displayId) {
@@ -80,7 +107,6 @@
             timeStates[r][s] = sec;
             const display = document.getElementById(displayId);
             display.innerText = sec.toString().padStart(3, '0');
-
             intervals[r][s] = setInterval(() => {
                 if (timeStates[r][s] > 0) {
                     timeStates[r][s]--;
@@ -97,15 +123,12 @@
             for (let i = 0; i < rowsCount; i++) {
                 const row = document.createElement('div');
                 row.className = 'row';
-
                 const selectors = document.createElement('div');
                 selectors.className = 'selectors-group';
-
                 const rightGroup = document.createElement('div');
                 rightGroup.className = 'right-aligned-group';
 
                 let def1 = (i === 0 || i === 2) ? '순간이동' : (i === 3 ? '방어막' : (i === 4 ? '회복' : '점멸'));
-
                 const boost = document.createElement('select');
                 boost.className = 'boost-selector';
                 const opts = i === 2 ? [['2','기본'],['3','신발'],['5','미장'],['6','신+우'],['7','미+우']] : [['2','기본'],['3','신발'],['4','우통'],['6','신+우']];
@@ -115,15 +138,11 @@
                     selectors.appendChild(boost);
                     rightGroup.appendChild(createTimerUnit(i, 1));
                     row.append(selectors, rightGroup);
-                    
-                    const upd = () => { 
-                        if (spellDataMap['점멸']) updateBtn(i, 1, '점멸', boost.value); 
-                    };
-                    boost.onchange = upd; 
-                    setTimeout(upd, 0); 
+                    const upd = () => updateBtn(i, 1, '점멸', boost.value);
+                    boost.onchange = upd; setTimeout(upd, 0);
                 } else {
-                    const s1 = createSelect(def1);
-                    const s2 = createSelect('점멸');
+                    const s1 = createSelect(def1, i, 0);
+                    const s2 = createSelect('점멸', i, 1);
                     selectors.append(s1, s2, boost);
 
                     if (i === 0) {
@@ -135,23 +154,17 @@
                         rightGroup.append(createTimerUnit(i, 0), createTimerUnit(i, 1));
                     }
                     row.append(selectors, rightGroup);
-
-                    const upd = () => { 
-                        if (spellDataMap[s1.value] && spellDataMap[s2.value]) {
-                            updateBtn(i, 0, s1.value, boost.value); 
-                            updateBtn(i, 1, s2.value, boost.value); 
-                        }
-                    };
-                    s1.onchange = s2.onchange = boost.onchange = upd; 
-                    setTimeout(upd, 0); 
+                    const upd = () => { updateBtn(i, 0, s1.value, boost.value); updateBtn(i, 1, s2.value, boost.value); };
+                    s1.onchange = s2.onchange = boost.onchange = upd; setTimeout(upd, 0);
                 }
                 container.appendChild(row);
             }
         }
 
-        function createSelect(def) {
+        function createSelect(def, r, s) {
             const sel = document.createElement('select');
             sel.className = 'spell-selector';
+            sel.id = `sel-${r}-${s}`; // API 동기화를 위한 ID 부여
             Object.keys(spellDataMap).forEach(name => {
                 const opt = document.createElement('option'); opt.value = name; opt.innerText = name;
                 if (name === def) opt.selected = true;
@@ -178,7 +191,6 @@
             btn.onclick = () => startTimer(r, s, sec, `time-${r}-${s}`);
             box.appendChild(btn);
         }
-        
         init();
     </script>
 </body>
