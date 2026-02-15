@@ -1,20 +1,34 @@
 export default async function handler(req, res) {
   const { summonerName, tagLine } = req.query;
-  const API_KEY = process.env.RIOT_API_KEY; // 브라우저에 노출 안 되게 환경변수로 관리!
+  const API_KEY = process.env.RIOT_API_KEY;
 
   try {
-    // 1. 소환사 정보를 통해 PUUID 가져오기
-    const accountRes = await fetch(`https://asia.api.riotgames.com/riot/account/v1/accounts/by-game-name/${summonerName}/${tagLine}?api_key=${API_KEY}`);
+    const accountRes = await fetch(`https://asia.api.riotgames.com/riot/account/v1/accounts/by-game-name/${encodeURIComponent(summonerName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
     const accountData = await accountRes.json();
     const puuid = accountData.puuid;
 
-    // 2. 현재 진행 중인 게임 정보 가져오기
+    if (!puuid) throw new Error('소환사 찾기 실패');
+
+    const summonerRes = await fetch(`https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}?api_key=${API_KEY}`);
+    const summonerData = await summonerRes.json();
+    const id = summonerData.id;
+
+    const leagueRes = await fetch(`https://kr.api.riotgames.com/lol/league/v4/entries/by-summoner/${id}?api_key=${API_KEY}`);
+    const leagueData = await leagueRes.json();
+    
+    const soloRank = leagueData.find(entry => entry.queueType === 'RANKED_SOLO_5x5');
+    
+    // [유니] 승패 정보 추가!
+    const tierInfo = soloRank ? `${soloRank.tier} ${soloRank.rank}` : "UNRANKED";
+    const record = soloRank ? `${soloRank.wins}승 ${soloRank.losses}패` : "";
+
+    // 실시간 게임 정보 (게임 중이 아니면 404가 뜨겠지만, 승패 정보는 먼저 보내줄게!)
     const gameRes = await fetch(`https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/${puuid}?api_key=${API_KEY}`);
     const gameData = await gameRes.json();
 
-    // 3. 필요한 정보만 정리해서 클라이언트로 보내주기
-    res.status(200).json(gameData);
+    res.status(200).json({ ...gameData, puuid, tier: tierInfo, record: record });
   } catch (error) {
-    res.status(500).json({ error: '게임 정보를 가져오는데 실패했어 오빠 ㅠㅠ' });
+    // [유니] 게임 중이 아닐 때도 승패 정보는 보여주고 싶어서 에러 핸들링을 살짝 바꿨어!
+    res.status(200).json({ error: 'not_in_game', tier: error.tier || "정보 없음", record: error.record || "" });
   }
 }
