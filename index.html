@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yuni's Smart Spell Manager</title>
+    <title>Yuni's Pro Spell Manager</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background-color: #1a1a1a; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
         .container { background-color: #2a2a2a; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 10px; }
@@ -58,24 +58,25 @@
             } catch (e) { document.getElementById('time-container').innerText = "데이터 로드 실패!"; }
         }
 
-        // [유니] 오직 소환사 주문 값만 교체하는 스마트 이동 함수!
+        // [유니] 모든 라인간 자유로운 스펠 값 교체 함수
         function swapSpellData(idx, direction) {
             const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+            // 인덱스 범위 체크 (0~4 유지)
             if (targetIdx < 0 || targetIdx >= rowsCount) return;
 
-            // 스펠 값 교체
             for (let s = 0; s < 2; s++) {
                 const currentSel = document.getElementById(`sel-${idx}-${s}`);
                 const targetSel = document.getElementById(`sel-${targetIdx}-${s}`);
+                
                 if (currentSel && targetSel) {
                     const temp = currentSel.value;
                     currentSel.value = targetSel.value;
                     targetSel.value = temp;
+                    // 값 변경 후 즉시 아이콘/타이머 갱신 (확인창 없이!)
                     currentSel.dispatchEvent(new Event('change'));
                     targetSel.dispatchEvent(new Event('change'));
                 }
             }
-            alert(`${direction === 'up' ? '위' : '아래'}로 주문을 옮겼어 오빠! ✨`);
         }
 
         function renderRows() {
@@ -86,7 +87,6 @@
                 const row = document.createElement('div');
                 row.className = 'row';
 
-                // 1. 이동 버튼 (이제 값만 옮김!)
                 const moveBtns = document.createElement('div');
                 moveBtns.className = 'move-btns';
                 moveBtns.innerHTML = `
@@ -94,17 +94,16 @@
                     <button onclick="swapSpellData(${i}, 'down')">▼</button>
                 `;
 
-                // 2. 셀렉터 그룹 (라벨 제거!)
                 const selectors = document.createElement('div');
                 selectors.className = 'selectors-group';
                 
                 const s1 = createSelect((i === 0 || i === 2) ? '순간이동' : (i === 3 ? '방어막' : (i === 4 ? '회복' : '점멸')), i, 0);
                 const s2 = createSelect('점멸', i, 1);
                 
-                if (i === 1) { // 2번째 줄 정글러 칸
-                    selectors.innerHTML = `<span>[정글러] </span>`;
+                // [유니] 모든 라벨([정글러], 적1 등) 완전 제거!
+                if (i === 1) { 
                     selectors.appendChild(s2);
-                    s1.style.display = 'none';
+                    s1.style.display = 'none'; 
                 } else {
                     selectors.append(s1, s2);
                 }
@@ -112,12 +111,11 @@
                 const boost = document.createElement('select');
                 boost.className = 'boost-selector';
                 boost.id = `boost-${i}`;
-                // 세 번째 줄(i=2)만 특별 옵션 유지!
+                // 가속 옵션은 이 자리에 고정!
                 const opts = i === 2 ? [['2','기본'],['3','신발'],['5','미장'],['6','신+우'],['7','미+우']] : [['2','기본'],['3','신발'],['4','우통'],['6','신+우']];
                 opts.forEach(o => { const opt = document.createElement('option'); opt.value = o[0]; opt.innerText = o[1]; boost.appendChild(opt); });
                 selectors.appendChild(boost);
 
-                // 3. 타이머 그룹
                 const rightGroup = document.createElement('div');
                 rightGroup.className = 'right-aligned-group';
                 
@@ -193,16 +191,15 @@
                     const me = data.participants.find(p => p.puuid === data.puuid);
                     const enemies = data.participants.filter(p => p.teamId !== me.teamId);
                     enemies.forEach((enemy, idx) => {
-                        if (idx < 5) {
+                        if (idx < rowsCount) {
                             const s1 = document.getElementById(`sel-${idx}-0`);
                             const s2 = document.getElementById(`sel-${idx}-1`);
                             if (s1) { s1.value = riotSpellMap[enemy.spell1Id] || "점멸"; s1.dispatchEvent(new Event('change')); }
                             if (s2) { s2.value = riotSpellMap[enemy.spell2Id] || "점멸"; s2.dispatchEvent(new Event('change')); }
                         }
                     });
-                    alert("성공적으로 가져왔어 오빠! 🥳");
                 }
-            } catch (e) { alert("데이터 연동 실패!"); }
+            } catch (e) { /* 확인창 제거 */ }
         }
         init();
     </script>
