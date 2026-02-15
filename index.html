@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yuni's Pro Spell Manager</title>
+    <title>Spell Timer</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background-color: #1a1a1a; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
         .container { background-color: #2a2a2a; padding: 20px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 10px; }
@@ -24,6 +24,9 @@
         .timer-unit { display: flex; align-items: center; gap: 5px; }
         .spell-btn { width: 44px; height: 44px; padding: 0; cursor: pointer; background-color: #444; border: 2px solid #666; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
         .spell-btn img { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* [유니] 정글러 첫 칸 숨기기 전용 스타일 */
+        .hidden-jungle-spell { visibility: hidden; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -31,7 +34,7 @@
         <div class="search-box">
             <input type="text" id="summoner-name" placeholder="소환사명" style="width: 150px;">
             <input type="text" id="tag-line" placeholder="태그" style="width: 80px;">
-            <button class="search-btn" onclick="fetchGameInfo()">가져오기</button>
+            <button class="search-btn" onclick="fetchGameInfo()">Go</button>
         </div>
         <div id="time-container"></div>
     </div>
@@ -58,10 +61,9 @@
             } catch (e) { document.getElementById('time-container').innerText = "데이터 로드 실패!"; }
         }
 
-        // [유니] 모든 라인간 자유로운 스펠 값 교체 함수
+        // [유니] 모든 라인간 2개의 스펠 데이터를 핑퐁처럼 교체!
         function swapSpellData(idx, direction) {
             const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
-            // 인덱스 범위 체크 (0~4 유지)
             if (targetIdx < 0 || targetIdx >= rowsCount) return;
 
             for (let s = 0; s < 2; s++) {
@@ -72,7 +74,6 @@
                     const temp = currentSel.value;
                     currentSel.value = targetSel.value;
                     targetSel.value = temp;
-                    // 값 변경 후 즉시 아이콘/타이머 갱신 (확인창 없이!)
                     currentSel.dispatchEvent(new Event('change'));
                     targetSel.dispatchEvent(new Event('change'));
                 }
@@ -100,18 +101,15 @@
                 const s1 = createSelect((i === 0 || i === 2) ? '순간이동' : (i === 3 ? '방어막' : (i === 4 ? '회복' : '점멸')), i, 0);
                 const s2 = createSelect('점멸', i, 1);
                 
-                // [유니] 모든 라벨([정글러], 적1 등) 완전 제거!
-                if (i === 1) { 
-                    selectors.appendChild(s2);
-                    s1.style.display = 'none'; 
-                } else {
-                    selectors.append(s1, s2);
+                // [유니 핵심] 2번째 줄(i=1)도 s1을 생성하지만 클래스로 투명하게 처리!
+                if (i === 1) {
+                    s1.classList.add('hidden-jungle-spell'); 
                 }
+                selectors.append(s1, s2);
 
                 const boost = document.createElement('select');
                 boost.className = 'boost-selector';
                 boost.id = `boost-${i}`;
-                // 가속 옵션은 이 자리에 고정!
                 const opts = i === 2 ? [['2','기본'],['3','신발'],['5','미장'],['6','신+우'],['7','미+우']] : [['2','기본'],['3','신발'],['4','우통'],['6','신+우']];
                 opts.forEach(o => { const opt = document.createElement('option'); opt.value = o[0]; opt.innerText = o[1]; boost.appendChild(opt); });
                 selectors.appendChild(boost);
@@ -120,8 +118,12 @@
                 rightGroup.className = 'right-aligned-group';
                 
                 if (i === 0) rightGroup.append(createTimerUnit(i, 2, 'teleport'));
-                if (i !== 1) rightGroup.append(createTimerUnit(i, 0));
-                rightGroup.append(createTimerUnit(i, 1));
+                
+                // [유니 핵심] 버튼과 타이머도 2번째 줄만 투명하게 처리!
+                const unit1 = createTimerUnit(i, 0);
+                if (i === 1) unit1.classList.add('hidden-jungle-spell');
+                
+                rightGroup.append(unit1, createTimerUnit(i, 1));
 
                 row.append(moveBtns, selectors, rightGroup);
                 
@@ -199,7 +201,7 @@
                         }
                     });
                 }
-            } catch (e) { /* 확인창 제거 */ }
+            } catch (e) { }
         }
         init();
     </script>
