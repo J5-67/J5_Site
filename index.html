@@ -12,14 +12,21 @@
         .search-btn { padding: 6px 15px; background: #00ffcc; color: #1a1a1a; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
         #tier-display { font-weight: bold; color: #ffcc00; font-size: 0.95rem; text-align: center; }
         #record-display { font-size: 0.85rem; color: #00ffcc; margin-left: 5px; }
-        .row { display: flex; align-items: center; justify-content: space-between; gap: 15px; background-color: #333; padding: 10px; border-radius: 8px; min-width: 650px; }
+        
+        /* [유니] 줄 레이아웃 수정 */
+        .row { display: flex; align-items: center; gap: 15px; background-color: #333; padding: 10px; border-radius: 8px; min-width: 650px; margin-bottom: 8px; }
+        .move-btns { display: flex; flex-direction: column; gap: 2px; margin-right: 5px; }
+        .move-btns button { width: 24px; height: 20px; font-size: 10px; padding: 0; background: #444; color: white; border: 1px solid #666; cursor: pointer; }
+        
         .right-aligned-group { display: flex; align-items: center; gap: 15px; margin-left: auto; }
-        .selectors-group { display: flex; gap: 5px; }
+        .selectors-group { display: flex; gap: 5px; align-items: center; }
         .spell-selector, .boost-selector { background-color: #222; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 5px; font-size: 0.85rem; cursor: pointer; }
         .spell-selector { width: 90px; } .boost-selector { width: 110px; }
         .time-display { font-size: 1.5rem; font-weight: bold; width: 55px; text-align: center; color: #00ffcc; }
-        button { width: 44px; height: 44px; padding: 0; cursor: pointer; background-color: #444; border: 2px solid #666; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        button img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .timer-unit { display: flex; align-items: center; gap: 5px; }
+        .spell-btn { width: 44px; height: 44px; padding: 0; cursor: pointer; background-color: #444; border: 2px solid #666; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .spell-btn img { width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
 <body>
@@ -27,7 +34,7 @@
         <div class="search-box">
             <input type="text" id="summoner-name" placeholder="소환사명" style="width: 150px;">
             <input type="text" id="tag-line" placeholder="태그" style="width: 80px;">
-            <button class="search-btn" onclick="fetchGameInfo()">정보 가져오기</button>
+            <button class="search-btn" onclick="fetchGameInfo()">가져오기</button>
             <span id="tier-display"></span>
             <span id="record-display"></span>
         </div>
@@ -35,7 +42,6 @@
     </div>
 
     <script>
-        // ... (상단 매핑 테이블은 동일) ...
         const rowsCount = 5;
         let timeStates = Array.from({ length: 5 }, () => [0, 0, 0]);
         let intervals = Array.from({ length: 5 }, () => [null, null, null]);
@@ -53,111 +59,79 @@
                     const name = row[0].trim();
                     if (name && !name.includes('가속') && !name.includes('퀘스트') && spellFileMap[name]) spellDataMap[name] = row;
                 });
-                createTimerGrid();
+                renderEnemyRows(); // [유니] 초기 그리드 생성
             } catch (e) { document.getElementById('time-container').innerText = "데이터 로드 실패!"; }
         }
 
-        async function fetchGameInfo() {
-            let name = document.getElementById('summoner-name').value.trim();
-            let tag = document.getElementById('tag-line').value.trim();
-            const tierDisplay = document.getElementById('tier-display');
-            const recordDisplay = document.getElementById('record-display');
+        // [유니] 줄 위치 바꾸기 함수
+        function moveRow(idx, direction) {
+            const container = document.getElementById('time-container');
+            const rows = Array.from(container.querySelectorAll('.row'));
+            const currentRow = rows.find(r => parseInt(r.getAttribute('data-idx')) === idx);
             
-            if (tag.startsWith('#')) tag = tag.substring(1);
-            tierDisplay.innerText = "로딩 중...";
-        
-            try {
-                const response = await fetch(`/api/get-summoner-spells?summonerName=${encodeURIComponent(name)}&tagLine=${encodeURIComponent(tag)}`);
-                const data = await response.json();
-        
-                // [유니] 티어 정보 업데이트 (서버에서 넘겨준 값 그대로!)
-                tierDisplay.innerText = `[${data.tier || "UNRANKED"}]`;
-                recordDisplay.innerText = data.record || "전적 없음";
-        
-                if (data.error === 'not_in_game') {
-                    alert("정보는 가져왔지만 지금은 게임 중이 아니네 오빠! 🥺");
-                    return;
-                }
-        
-                // 1. 내 정보 찾기 (PUUID 기준)
-                const myPuuid = data.puuid;
-                const me = data.participants.find(p => p.puuid === myPuuid);
-                
-                if (!me) {
-                    alert("오빠 정보를 게임에서 못 찾았어... 닉네임 다시 확인해줘!");
-                    return;
-                }
-        
-                // 2. 적군만 필터링 (나와 팀 ID가 다른 사람들)
-                const enemies = data.participants.filter(p => p.teamId !== me.teamId);
-        
-                // 3. 적군 5명의 스펠을 순서대로 배치 (이미지 1번 순서와 일치시키기)
-                enemies.forEach((enemy, idx) => {
-                    if (idx < 5) {
-                        const s1Select = document.getElementById(`sel-${idx}-0`);
-                        const s2Select = document.getElementById(`sel-${idx}-1`);
-                        
-                        if (s1Select && s2Select) {
-                            // 라이엇 API가 주는 spell1Id, spell2Id를 순서대로 매핑
-                            s1Select.value = riotSpellMap[enemy.spell1Id] || "점멸";
-                            s2Select.value = riotSpellMap[enemy.spell2Id] || "점멸";
-                            
-                            // 값 변경 후 UI 업데이트 이벤트 발생
-                            s1Select.dispatchEvent(new Event('change'));
-                            s2Select.dispatchEvent(new Event('change'));
-                        }
-                    }
-                });
-                
-                alert("상대방 스펠을 순서대로 동기화했어! 🎯");
-            } catch (e) {
-                tierDisplay.innerText = "[에러 발생]";
-                console.error(e);
+            if (direction === 'up' && currentRow.previousElementSibling) {
+                container.insertBefore(currentRow, currentRow.previousElementSibling);
+            } else if (direction === 'down' && currentRow.nextElementSibling) {
+                container.insertBefore(currentRow.nextElementSibling, currentRow);
             }
         }
 
-        // ... (이후 createTimerGrid, startTimer 등 기존 로직 동일) ...
-        function startTimer(r, s, sec, displayId) {
-            if (intervals[r][s]) clearInterval(intervals[r][s]);
-            timeStates[r][s] = sec;
-            const display = document.getElementById(displayId);
-            display.innerText = sec.toString().padStart(3, '0');
-            intervals[r][s] = setInterval(() => {
-                if (timeStates[r][s] > 0) {
-                    timeStates[r][s]--;
-                    display.innerText = timeStates[r][s].toString().padStart(3, '0');
-                } else { clearInterval(intervals[r][s]); intervals[r][s] = null; }
-            }, 1000);
-        }
-
-        function createTimerGrid() {
+        function renderEnemyRows() {
             const container = document.getElementById('time-container');
             container.innerHTML = '';
+
             for (let i = 0; i < rowsCount; i++) {
                 const row = document.createElement('div');
                 row.className = 'row';
+                row.setAttribute('data-idx', i);
+
+                // 1. 이동 버튼
+                const moveBtns = document.createElement('div');
+                moveBtns.className = 'move-btns';
+                moveBtns.innerHTML = `
+                    <button onclick="moveRow(${i}, 'up')">▲</button>
+                    <button onclick="moveRow(${i}, 'down')">▼</button>
+                `;
+
+                // 2. 셀렉터 그룹
                 const selectors = document.createElement('div');
                 selectors.className = 'selectors-group';
-                const rightGroup = document.createElement('div');
-                rightGroup.className = 'right-aligned-group';
-
+                
                 const s1 = createSelect((i === 0 || i === 2) ? '순간이동' : (i === 3 ? '방어막' : (i === 4 ? '회복' : '점멸')), i, 0);
                 const s2 = createSelect('점멸', i, 1);
+                
+                // [유니] 2번째 줄(정글)은 스펠2와 라벨 변경
+                if (i === 1) {
+                    selectors.innerHTML = `<span>[정글러] </span>`;
+                    selectors.appendChild(s2); // 점멸만 표시
+                    s1.style.display = 'none'; // 나머지는 숨김
+                } else {
+                    selectors.innerHTML = `<span>적 ${i+1} </span>`;
+                    selectors.append(s1, s2);
+                }
+
                 const boost = document.createElement('select');
                 boost.className = 'boost-selector';
                 const opts = i === 2 ? [['2','기본'],['3','신발'],['5','미장'],['6','신+우'],['7','미+우']] : [['2','기본'],['3','신발'],['4','우통'],['6','신+우']];
                 opts.forEach(o => { const opt = document.createElement('option'); opt.value = o[0]; opt.innerText = o[1]; boost.appendChild(opt); });
+                selectors.appendChild(boost);
 
-                selectors.append(s1, s2, boost);
-                if (i === 0) {
-                    const unit7 = document.createElement('div');
-                    unit7.className = 'timer-unit';
-                    unit7.innerHTML = `<span class="time-display" id="time-0-tp7">000</span><button style="border-color: #9b4dff" onclick="startTimer(0, 2, 420, 'time-0-tp7')"><img src="images/teleport.png"></button>`;
-                    rightGroup.append(unit7);
-                }
-                rightGroup.append(createTimerUnit(i, 0), createTimerUnit(i, 1));
-                row.append(selectors, rightGroup);
-                const upd = () => { updateBtn(i, 0, s1.value, boost.value); updateBtn(i, 1, s2.value, boost.value); };
+                // 3. 타이머 그룹
+                const rightGroup = document.createElement('div');
+                rightGroup.className = 'right-aligned-group';
+                
+                if (i === 0) rightGroup.append(createTimerUnit(i, 2, 'teleport')); // 텔포 고정 칸
+                
+                if (i !== 1) rightGroup.append(createTimerUnit(i, 0)); // 스펠 1 (정글 아니면 표시)
+                rightGroup.append(createTimerUnit(i, 1)); // 스펠 2 (점멸)
+
+                row.append(moveBtns, selectors, rightGroup);
+                
+                const upd = () => { 
+                    updateBtn(i, 0, s1.value, boost.value); 
+                    updateBtn(i, 1, s2.value, boost.value); 
+                    if (i === 0) updateBtn(i, 2, '순간이동', '2', true); // 7분텔용
+                };
                 s1.onchange = s2.onchange = boost.onchange = upd;
                 setTimeout(upd, 0);
                 container.appendChild(row);
@@ -174,21 +148,49 @@
             return sel;
         }
 
-        function createTimerUnit(r, s) {
+        function createTimerUnit(r, s, forceIcon = null) {
             const div = document.createElement('div'); div.className = 'timer-unit';
-            div.innerHTML = `<span class="time-display" id="time-${r}-${s}">000</span><div id="btn-box-${r}-${s}"></div>`;
+            const displayId = `time-${r}-${s}${forceIcon ? '-tp7' : ''}`;
+            div.innerHTML = `<span class="time-display" id="${displayId}">000</span><div id="btn-box-${r}-${s}${forceIcon ? '-tp7' : ''}"></div>`;
             return div;
         }
 
-        function updateBtn(r, s, name, bIdx) {
-            const box = document.getElementById(`btn-box-${r}-${s}`);
+        function updateBtn(r, s, name, bIdx, isTp7 = false) {
+            const suffix = isTp7 ? '-tp7' : '';
+            const box = document.getElementById(`btn-box-${r}-${s}${suffix}`);
             if (!box || !spellDataMap[name]) return;
             box.innerHTML = '';
             const btn = document.createElement('button');
-            btn.style.borderColor = spellColorMap[name] || '#666';
+            btn.className = 'spell-btn';
+            btn.style.borderColor = isTp7 ? '#9b4dff' : (spellColorMap[name] || '#666');
             btn.innerHTML = `<img src="images/${spellFileMap[name]}.png">`;
-            btn.onclick = () => startTimer(r, s, parseInt(spellDataMap[name][bIdx]), `time-${r}-${s}`);
+            const cooldown = isTp7 ? 420 : parseInt(spellDataMap[name][bIdx]);
+            btn.onclick = () => startTimer(r, s, cooldown, `time-${r}-${s}${suffix}`);
             box.appendChild(btn);
+        }
+
+        async function fetchGameInfo() {
+            let name = document.getElementById('summoner-name').value.trim();
+            let tag = document.getElementById('tag-line').value.trim();
+            if (tag.startsWith('#')) tag = tag.substring(1);
+            try {
+                const response = await fetch(`/api/get-summoner-spells?summonerName=${encodeURIComponent(name)}&tagLine=${encodeURIComponent(tag)}`);
+                const data = await response.json();
+                document.getElementById('tier-display').innerText = `[${data.tier || "UNRANKED"}]`;
+                document.getElementById('record-display').innerText = data.record || "";
+                if (data.participants) {
+                    const me = data.participants.find(p => p.puuid === data.puuid);
+                    const enemies = data.participants.filter(p => p.teamId !== me.teamId);
+                    enemies.forEach((enemy, idx) => {
+                        if (idx < 5) {
+                            const s1 = document.getElementById(`sel-${idx}-0`);
+                            const s2 = document.getElementById(`sel-${idx}-1`);
+                            if (s1) { s1.value = riotSpellMap[enemy.spell1Id] || "점멸"; s1.dispatchEvent(new Event('change')); }
+                            if (s2) { s2.value = riotSpellMap[enemy.spell2Id] || "점멸"; s2.dispatchEvent(new Event('change')); }
+                        }
+                    });
+                }
+            } catch (e) { alert("데이터 연동 실패!"); }
         }
         init();
     </script>
