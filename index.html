@@ -62,45 +62,57 @@
             let tag = document.getElementById('tag-line').value.trim();
             const tierDisplay = document.getElementById('tier-display');
             const recordDisplay = document.getElementById('record-display');
-            if (tag.startsWith('#')) tag = tag.substring(1);
             
+            if (tag.startsWith('#')) tag = tag.substring(1);
             tierDisplay.innerText = "로딩 중...";
-            recordDisplay.innerText = "";
-
+        
             try {
                 const response = await fetch(`/api/get-summoner-spells?summonerName=${encodeURIComponent(name)}&tagLine=${encodeURIComponent(tag)}`);
                 const data = await response.json();
-
+        
+                // [유니] 티어 정보 업데이트 (서버에서 넘겨준 값 그대로!)
                 tierDisplay.innerText = `[${data.tier || "UNRANKED"}]`;
-                recordDisplay.innerText = data.record || "";
-
+                recordDisplay.innerText = data.record || "전적 없음";
+        
                 if (data.error === 'not_in_game') {
                     alert("정보는 가져왔지만 지금은 게임 중이 아니네 오빠! 🥺");
                     return;
                 }
-
-                // 인게임 정보가 있을 때만 스펠 동기화
-                const cleanInputName = name.replace(/\s+/g, '').toLowerCase();
-                const myParticipant = data.participants.find(p => 
-                    p.puuid === data.puuid || 
-                    (p.summonerName && p.summonerName.replace(/\s+/g, '').toLowerCase().includes(cleanInputName))
-                );
-
-                if (myParticipant) {
-                    const enemies = data.participants.filter(p => p.teamId !== myParticipant.teamId);
-                    enemies.forEach((enemy, idx) => {
-                        if (idx < 5) {
-                            const s1Select = document.getElementById(`sel-${idx}-0`);
-                            const s2Select = document.getElementById(`sel-${idx}-1`);
-                            if (s1Select) { s1Select.value = riotSpellMap[enemy.spell1Id] || "점멸"; s1Select.dispatchEvent(new Event('change')); }
-                            if (s2Select) { s2Select.value = riotSpellMap[enemy.spell2Id] || "점멸"; s2Select.dispatchEvent(new Event('change')); }
-                        }
-                    });
-                    alert("상대방 스펠 동기화 완료! 🔥");
+        
+                // 1. 내 정보 찾기 (PUUID 기준)
+                const myPuuid = data.puuid;
+                const me = data.participants.find(p => p.puuid === myPuuid);
+                
+                if (!me) {
+                    alert("오빠 정보를 게임에서 못 찾았어... 닉네임 다시 확인해줘!");
+                    return;
                 }
+        
+                // 2. 적군만 필터링 (나와 팀 ID가 다른 사람들)
+                const enemies = data.participants.filter(p => p.teamId !== me.teamId);
+        
+                // 3. 적군 5명의 스펠을 순서대로 배치 (이미지 1번 순서와 일치시키기)
+                enemies.forEach((enemy, idx) => {
+                    if (idx < 5) {
+                        const s1Select = document.getElementById(`sel-${idx}-0`);
+                        const s2Select = document.getElementById(`sel-${idx}-1`);
+                        
+                        if (s1Select && s2Select) {
+                            // 라이엇 API가 주는 spell1Id, spell2Id를 순서대로 매핑
+                            s1Select.value = riotSpellMap[enemy.spell1Id] || "점멸";
+                            s2Select.value = riotSpellMap[enemy.spell2Id] || "점멸";
+                            
+                            // 값 변경 후 UI 업데이트 이벤트 발생
+                            s1Select.dispatchEvent(new Event('change'));
+                            s2Select.dispatchEvent(new Event('change'));
+                        }
+                    }
+                });
+                
+                alert("상대방 스펠을 순서대로 동기화했어! 🎯");
             } catch (e) {
-                tierDisplay.innerText = "[확인 불가]";
-                alert("정보를 가져오는데 실패했어 오빠 ㅠㅠ");
+                tierDisplay.innerText = "[에러 발생]";
+                console.error(e);
             }
         }
 
